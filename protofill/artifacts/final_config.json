@@ -1,0 +1,11 @@
+{
+  "cell_weighting": "equal",
+  "geometry": "direction_nlerp",
+  "method": "ProtoFill",
+  "parameter_selection": "BioDCASE training/validation only",
+  "query_statistics_used": false,
+  "ridge_lambda": 1.0,
+  "seeds": [42, 43, 44],
+  "strength_g": 0.75,
+  "test_labels_used_for_selection": false
+}
