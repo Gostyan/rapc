@@ -59,5 +59,6 @@ python -m experiments.select_loco_multiseed --help
 python -m experiments.evaluate --help
 ```
 
-An open-source license has deliberately not been selected on behalf of the
-authors. Add the agreed license before making the repository public.
+## License
+
+This project is released under the [MIT License](LICENSE).
