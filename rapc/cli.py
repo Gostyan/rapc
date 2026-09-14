@@ -1,4 +1,4 @@
-"""Command-line interface for encoder-independent ProtoFill inference."""
+"""Command-line interface for encoder-independent RAPC inference."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .core import DEFAULT_RIDGE_LAMBDA, DEFAULT_STRENGTH, build_domain_prototypes, fit_protofill, predict
+from .core import DEFAULT_RIDGE_LAMBDA, DEFAULT_STRENGTH, build_domain_prototypes, fit_rapc, predict
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Fit ProtoFill from an NPZ training cache and classify query embeddings. "
+            "Fit RAPC from an NPZ training cache and classify query embeddings. "
             "Required keys: train_embeddings, train_labels, train_domains, "
             "query_embeddings, query_domains."
         )
@@ -42,7 +42,7 @@ def main() -> None:
         missing = sorted(required.difference(cache.files))
         if missing:
             raise ValueError(f"input cache lacks required keys: {missing}")
-        fitted = fit_protofill(
+        fitted = fit_rapc(
             torch.from_numpy(cache["train_embeddings"]),
             torch.from_numpy(cache["train_labels"]),
             torch.from_numpy(cache["train_domains"]),
@@ -64,7 +64,7 @@ def main() -> None:
         domain_tables.append(table.cpu().numpy())
         domain_roles.append(roles)
     metadata = {
-        "method": "ProtoFill",
+        "method": "RAPC",
         "ridge_lambda": float(args.ridge_lambda),
         "strength": float(args.strength),
         "geometry": "direction_nlerp",

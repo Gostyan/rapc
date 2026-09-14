@@ -16,27 +16,27 @@ def aggregate(paths: list[Path]) -> dict:
         if payload.get("status") != "complete":
             raise ValueError(f"{path} is not a complete evaluation")
         global_ba = float(payload["methods"]["global_prototype"]["BA_unseen"])
-        protofill_ba = float(payload["methods"]["protofill"]["BA_unseen"])
+        rapc_ba = float(payload["methods"]["rapc"]["BA_unseen"])
         rows.append(
             {
                 "path": str(path),
                 "global_prototype": global_ba,
-                "protofill": protofill_ba,
-                "paired_gain": protofill_ba - global_ba,
+                "rapc": rapc_ba,
+                "paired_gain": rapc_ba - global_ba,
             }
         )
     if not rows:
         raise ValueError("at least one result is required")
     global_values = np.asarray([row["global_prototype"] for row in rows])
-    protofill_values = np.asarray([row["protofill"] for row in rows])
-    gains = protofill_values - global_values
+    rapc_values = np.asarray([row["rapc"] for row in rows])
+    gains = rapc_values - global_values
     return {
-        "schema_version": "protofill_matched_aggregate.v1",
+        "schema_version": "rapc_matched_aggregate.v1",
         "run_count": len(rows),
         "global_prototype_mean": float(global_values.mean()),
         "global_prototype_std_population": float(global_values.std(ddof=0)),
-        "protofill_mean": float(protofill_values.mean()),
-        "protofill_std_population": float(protofill_values.std(ddof=0)),
+        "rapc_mean": float(rapc_values.mean()),
+        "rapc_std_population": float(rapc_values.std(ddof=0)),
         "paired_gain_mean": float(gains.mean()),
         "positive_runs": int((gains > 0).sum()),
         "runs": rows,

@@ -5,17 +5,17 @@ import unittest
 import torch
 import torch.nn.functional as F
 
-from protofill import (
+from rapc import (
     build_cell_table,
     build_domain_prototypes,
-    fit_protofill,
+    fit_rapc,
     fit_two_way_ridge,
     predict,
     support_connected,
 )
 
 
-class ProtoFillTests(unittest.TestCase):
+class RAPCTests(unittest.TestCase):
     def test_closed_form_recovers_exact_additive_cell_without_ridge(self) -> None:
         class_effect = torch.tensor([[1.0, 0.0], [0.0, 2.0]])
         domain_effect = torch.tensor([[0.0, 0.0], [3.0, -1.0]])
@@ -58,7 +58,7 @@ class ProtoFillTests(unittest.TestCase):
         )
         classes = torch.tensor([0, 0, 1, 1, 0])
         domains = torch.tensor([0, 0, 0, 0, 1])
-        fitted = fit_protofill(
+        fitted = fit_rapc(
             embeddings, classes, domains, num_classes=2, num_domains=2
         )
         prototypes, details = build_domain_prototypes(fitted, target_domain=1)
@@ -68,11 +68,25 @@ class ProtoFillTests(unittest.TestCase):
         self.assertEqual(details[1]["role"], "missing_completed")
         self.assertAlmostEqual(float(prototypes[1].norm()), 1.0, places=6)
 
+    def test_local_policy_changes_only_observed_entries(self) -> None:
+        embeddings = torch.tensor([[1.0, 0.0], [0.0, 1.0], [0.8, 0.2]])
+        fitted = fit_rapc(
+            embeddings, torch.tensor([0, 1, 0]), torch.tensor([0, 0, 1]),
+            num_classes=2, num_domains=2,
+        )
+        global_table, _ = build_domain_prototypes(fitted, 1)
+        local_table, details = build_domain_prototypes(
+            fitted, 1, observed_policy="local"
+        )
+        self.assertFalse(torch.equal(global_table[0], local_table[0]))
+        self.assertTrue(torch.equal(global_table[1], local_table[1]))
+        self.assertEqual(details[0]["role"], "observed_local_cell")
+
     def test_prediction_requires_domains_but_not_query_labels(self) -> None:
         embeddings = torch.tensor(
             [[1.0, 0.0], [0.9, 0.1], [0.0, 1.0], [0.1, 0.9], [0.7, 0.7]]
         )
-        fitted = fit_protofill(
+        fitted = fit_rapc(
             embeddings,
             torch.tensor([0, 0, 1, 1, 0]),
             torch.tensor([0, 0, 0, 0, 1]),

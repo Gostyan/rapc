@@ -1,6 +1,6 @@
-# ProtoFill
+# RAPC
 
-ProtoFill is an encoder-agnostic, inference-time module for completing a class
+RAPC is an encoder-agnostic, inference-time module for completing a class
 prototype that is absent from a **known** domain. It operates only on frozen
 training embeddings, class labels, and domain labels. It does not update the
 encoder and does not use query labels or query-set statistics.
@@ -13,12 +13,12 @@ validation-locked defaults are:
 - equal weight for every observed class-domain cell.
 
 The older local-anchor translation with `g = 0.5` is an ablation baseline and
-is **not** the final ProtoFill method.
+is **not** the final RAPC method.
 
 ## Problem setting
 
 Given normalized encoder outputs, let `p[d,c]` be the mean embedding of an
-observed domain-class cell. ProtoFill fits
+observed domain-class cell. RAPC fits
 
 ```text
 p[d,c] = common_center + class_effect[c] + domain_effect[d]
@@ -37,9 +37,9 @@ a method for a wholly unseen domain.
 ## Python API
 
 ```python
-from protofill import fit_protofill, predict
+from rapc import fit_rapc, predict
 
-fitted = fit_protofill(
+fitted = fit_rapc(
     train_embeddings,  # [N, L]
     train_class_ids,   # [N], zero-based
     train_domain_ids,  # [N], zero-based
@@ -52,7 +52,7 @@ predictions = predict(
 )
 ```
 
-Input embeddings are normalized sample by sample inside `fit_protofill` and
+Input embeddings are normalized sample by sample inside `fit_rapc` and
 `predict`. Supplying query class labels is neither required nor supported.
 
 ## Command-line API
@@ -67,7 +67,7 @@ query_embeddings, query_domains
 Then run:
 
 ```bash
-python -m protofill --input embeddings.npz --output predictions.npz
+python -m rapc --input embeddings.npz --output predictions.npz
 ```
 
 The output contains predictions, the completed prototype table for every
@@ -98,8 +98,9 @@ The standalone, encoder-independent experiment entry points are:
 
 - validation-only leave-one-observed-cell-out selection:
   `experiments/select_loco.py`;
-- held-cell Global prototype versus ProtoFill evaluation:
+- held-cell RAPC and 2x2 observed/missing prototype-policy evaluation:
   `experiments/evaluate.py`;
+- joint multi-seed LOCO selection: `experiments/select_loco_multiseed.py`;
 - matched-seed aggregation: `experiments/aggregate.py`.
 
 All parameter selection must finish using training/validation embeddings

@@ -1,4 +1,4 @@
-"""Evaluate Global prototype and locked ProtoFill on held class-domain cells."""
+"""Evaluate locked RAPC and its 2x2 prototype-table controls."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from protofill import fit_protofill, predict
+from rapc import fit_rapc, predict
 
 from .common import held_cell_mask, infer_sizes, load_cache, macro_recall, sha256
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_LOCK = ROOT / "protofill/artifacts/final_config.json"
+DEFAULT_LOCK = ROOT / "configs/final_rapc.json"
 
 
 def load_lock(path: Path) -> dict:
@@ -28,7 +28,7 @@ def load_lock(path: Path) -> dict:
     }
     observed = {key: lock.get(key) for key in expected}
     if observed != expected:
-        raise ValueError(f"unexpected ProtoFill lock: {observed}")
+        raise ValueError(f"unexpected RAPC lock: {observed}")
     return lock
 
 
@@ -39,7 +39,7 @@ def evaluate(training_path: Path, evaluation_path: Path, lock_path: Path) -> dic
         raise ValueError("training and evaluation embedding dimensions differ")
     lock = load_lock(lock_path)
     num_classes, num_domains = infer_sizes(training, evaluation)
-    fitted = fit_protofill(
+    fitted = fit_rapc(
         training.embeddings,
         training.labels,
         training.domains,
@@ -51,34 +51,54 @@ def evaluate(training_path: Path, evaluation_path: Path, lock_path: Path) -> dic
     queries = F.normalize(evaluation.embeddings, dim=1)
     global_directions = F.normalize(fitted.table.global_centers, dim=1)
     global_predictions = (queries @ global_directions.T).argmax(1)
-    protofill_predictions = predict(
+    rapc_predictions = predict(
         fitted,
         evaluation.embeddings,
         evaluation.domains,
         strength=float(lock["strength_g"]),
     )
+    local_global_predictions = predict(
+        fitted, evaluation.embeddings, evaluation.domains,
+        strength=0.0, observed_policy="local",
+    )
+    local_rapc_predictions = predict(
+        fitted, evaluation.embeddings, evaluation.domains,
+        strength=float(lock["strength_g"]), observed_policy="local",
+    )
     inferred_mask = held_cell_mask(
         fitted.table.counts, evaluation.labels, evaluation.domains
     )
     mask = evaluation.unseen_mask if evaluation.unseen_mask is not None else inferred_mask
-    if evaluation.unseen_mask is not None and not torch.equal(mask, inferred_mask):
-        raise ValueError("provided unseen_mask disagrees with missing training cells")
+    if evaluation.unseen_mask is not None and bool((mask & ~inferred_mask).any()):
+        raise ValueError("unseen_mask includes a class-domain cell observed in training")
+    if not bool(mask.any()):
+        raise ValueError("evaluation mask selects no sample")
 
     global_result = macro_recall(
         global_predictions, evaluation.labels, mask, num_classes
     )
-    protofill_result = macro_recall(
-        protofill_predictions, evaluation.labels, mask, num_classes
+    rapc_result = macro_recall(
+        rapc_predictions, evaluation.labels, mask, num_classes
+    )
+    local_global_result = macro_recall(
+        local_global_predictions, evaluation.labels, mask, num_classes
+    )
+    local_rapc_result = macro_recall(
+        local_rapc_predictions, evaluation.labels, mask, num_classes
     )
     return {
-        "schema_version": "protofill_standalone_evaluation.v1",
+        "schema_version": "rapc_standalone_evaluation.v1",
         "status": "complete",
         "protocol": {
             "known_query_domain_required": True,
             "query_labels_used_for_prototypes": False,
             "query_statistics_used_for_prototypes": False,
             "evaluation_labels_used_for_metrics_only": True,
-            "unseen_mask": "training-cell absence, optionally asserted by cache",
+            "unseen_mask": (
+                "all missing training cells by default; an explicit registered "
+                "subset may be supplied by the evaluation cache"
+            ),
+            "observed_missing_source": "training cache only",
         },
         "configuration": lock,
         "source": {
@@ -89,10 +109,12 @@ def evaluate(training_path: Path, evaluation_path: Path, lock_path: Path) -> dic
         },
         "methods": {
             "global_prototype": global_result,
-            "protofill": protofill_result,
+            "local_global_prototype": local_global_result,
+            "rapc": rapc_result,
+            "local_rapc": local_rapc_result,
         },
         "paired_gain": (
-            protofill_result["BA_unseen"] - global_result["BA_unseen"]
+            rapc_result["BA_unseen"] - global_result["BA_unseen"]
         ),
     }
 

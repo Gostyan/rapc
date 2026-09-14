@@ -1,6 +1,6 @@
 """Closed-form completion of missing class-domain prototypes.
 
-ProtoFill consumes frozen training embeddings, class labels, and known domain
+RAPC consumes frozen training embeddings, class labels, and known domain
 labels.  It never uses query labels or query statistics to construct its
 prototype table.  The public defaults are the validation-locked paper
 configuration: ridge lambda=1, interpolation strength g=0.75, and normalized
@@ -46,7 +46,7 @@ class CellTable:
 
 
 @dataclass(frozen=True)
-class ProtoFillFit:
+class RAPCFit:
     """A fitted two-way ridge model and the statistics that produced it."""
 
     table: CellTable
@@ -82,7 +82,7 @@ def build_cell_table(
 
     Embeddings are L2-normalized sample by sample by default, matching the
     paper protocol.  Empty classes are rejected because neither the baseline
-    nor ProtoFill can construct their global class prototype.
+    nor RAPC can construct their global class prototype.
     """
 
     embeddings = torch.as_tensor(embeddings).detach()
@@ -217,7 +217,7 @@ def fit_two_way_ridge(
 
 
 @torch.no_grad()
-def fit_protofill(
+def fit_rapc(
     embeddings: torch.Tensor,
     class_ids: torch.Tensor,
     domain_ids: torch.Tensor,
@@ -226,8 +226,8 @@ def fit_protofill(
     num_domains: int | None = None,
     ridge_lambda: float = DEFAULT_RIDGE_LAMBDA,
     normalize_embeddings: bool = True,
-) -> ProtoFillFit:
-    """Fit ProtoFill from training data only."""
+) -> RAPCFit:
+    """Fit RAPC from training data only."""
 
     table = build_cell_table(
         embeddings,
@@ -247,7 +247,7 @@ def fit_protofill(
         num_domains=table.num_domains,
         ridge_lambda=ridge_lambda,
     )
-    return ProtoFillFit(
+    return RAPCFit(
         table=table,
         coefficients=coefficients,
         ridge_lambda=float(ridge_lambda),
@@ -257,7 +257,7 @@ def fit_protofill(
 
 
 def _completed_center(
-    fitted: ProtoFillFit,
+    fitted: RAPCFit,
     target_domain: int,
     target_class: int,
 ) -> torch.Tensor | None:
@@ -279,21 +279,24 @@ def _unit(vector: torch.Tensor, eps: float) -> torch.Tensor | None:
 
 @torch.no_grad()
 def build_domain_prototypes(
-    fitted: ProtoFillFit,
+    fitted: RAPCFit,
     target_domain: int,
     *,
     strength: float = DEFAULT_STRENGTH,
+    observed_policy: str = "global",
     eps: float = 1e-12,
 ) -> tuple[torch.Tensor, list[dict[str, Any]]]:
     """Build the C-way prototype table for one known query domain.
 
-    Observed entries retain the global class direction.  Only missing entries
-    are replaced, and disconnected or numerically degenerate completions fall
-    back to that same global direction.
+    The final method keeps global directions for observed entries. The local
+    policy is exposed only for the local+RAPC control. Missing entries use
+    ridge completion; disconnected or degenerate cases fall back to global.
     """
 
     if not 0.0 <= strength <= 1.0:
         raise ValueError("strength must lie in [0, 1]")
+    if observed_policy not in {"global", "local"}:
+        raise ValueError("observed_policy must be global or local")
     if not 0 <= target_domain < fitted.table.num_domains:
         raise ValueError("target_domain is outside the fitted table")
     global_directions = F.normalize(fitted.table.global_centers, dim=1, eps=eps)
@@ -301,6 +304,14 @@ def build_domain_prototypes(
     details: list[dict[str, Any]] = []
     for class_index in range(fitted.table.num_classes):
         if bool(fitted.table.observed[target_domain, class_index]):
+            if observed_policy == "local":
+                local_direction = _unit(
+                    fitted.table.centers[target_domain, class_index], eps
+                )
+                if local_direction is not None:
+                    prototypes[class_index] = local_direction
+                    details.append({"role": "observed_local_cell"})
+                    continue
             details.append({"role": "observed_global_anchor"})
             continue
         completion = _completed_center(fitted, target_domain, class_index)
@@ -328,11 +339,12 @@ def build_domain_prototypes(
 
 @torch.no_grad()
 def predict(
-    fitted: ProtoFillFit,
+    fitted: RAPCFit,
     query_embeddings: torch.Tensor,
     query_domain_ids: torch.Tensor,
     *,
     strength: float = DEFAULT_STRENGTH,
+    observed_policy: str = "global",
     eps: float = 1e-12,
 ) -> torch.Tensor:
     """Classify queries without using query labels or query-set statistics."""
@@ -352,7 +364,11 @@ def predict(
     for domain in query_domain_ids.unique(sorted=True).tolist():
         domain = int(domain)
         prototypes, _ = build_domain_prototypes(
-            fitted, domain, strength=strength, eps=eps
+            fitted,
+            domain,
+            strength=strength,
+            observed_policy=observed_policy,
+            eps=eps,
         )
         mask = query_domain_ids == domain
         predictions[mask] = (queries[mask] @ prototypes.to(queries.dtype).T).argmax(1)

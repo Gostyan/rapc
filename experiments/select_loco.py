@@ -1,4 +1,4 @@
-"""Select ProtoFill ridge and interpolation strengths by validation-only LOCO."""
+"""Select RAPC ridge and interpolation strengths by validation-only LOCO."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from protofill import fit_protofill, predict
+from rapc import fit_rapc, predict, support_connected
 
 from .common import infer_sizes, load_cache, sha256
 
@@ -42,9 +42,13 @@ def select(
         keep = ~hidden_mask
         if not bool((training.labels[keep] == class_index).any()):
             continue
+        observed = torch.zeros((num_domains, num_classes), dtype=torch.bool)
+        observed[training.domains[keep], training.labels[keep]] = True
+        if not support_connected(observed, domain, class_index):
+            continue
         episode_scores = {}
         for ridge in lambdas:
-            fitted = fit_protofill(
+            fitted = fit_rapc(
                 training.embeddings[keep],
                 training.labels[keep],
                 training.domains[keep],
@@ -84,13 +88,14 @@ def select(
         candidates.append((mean, ridge, g))
     mean, ridge, g = max(candidates, key=lambda row: (row[0], row[1], -row[2]))
     return {
-        "schema_version": "protofill_loco_selection.v1",
+        "schema_version": "rapc_loco_selection.v1",
         "status": "locked_before_test_evaluation",
         "protocol": {
             "selection_data": "training and validation embeddings only",
             "test_cache_read": False,
             "test_labels_read": False,
             "cell_weighting": "equal",
+            "episode_eligibility": "target class and domain connected after hiding",
             "geometry": "direction_nlerp",
             "tie_break": "larger lambda, then smaller g",
         },

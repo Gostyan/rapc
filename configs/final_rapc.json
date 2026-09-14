@@ -1,7 +1,7 @@
 {
   "cell_weighting": "equal",
   "geometry": "direction_nlerp",
-  "method": "ProtoFill",
+  "method": "RAPC",
   "parameter_selection": "BioDCASE training/validation only",
   "query_statistics_used": false,
   "ridge_lambda": 1.0,

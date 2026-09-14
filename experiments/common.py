@@ -1,4 +1,4 @@
-"""Shared cache loading and metrics for standalone ProtoFill experiments."""
+"""Shared cache loading and metrics for standalone RAPC experiments."""
 
 from __future__ import annotations
 

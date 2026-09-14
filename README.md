@@ -32,19 +32,19 @@ python -m pip install -r requirements.txt
 ## Minimal API
 
 ```python
-from protofill import fit_protofill, predict
+from rapc import fit_rapc, predict
 
-fitted = fit_protofill(train_embeddings, train_labels, train_domains)
+fitted = fit_rapc(train_embeddings, train_labels, train_domains)
 predictions = predict(fitted, query_embeddings, query_domains)
 ```
 
-See [protofill/README.md](protofill/README.md) for the equations and API, and
+See [rapc/README.md](rapc/README.md) for the equations and API, and
 [experiments/README.md](experiments/README.md) for cache schemas and commands.
 
 ## Repository layout
 
 ```text
-protofill/       final method, CLI, locked configuration, result summary
+rapc/       final method and embedding-cache CLI
 experiments/     validation-only LOCO selection and held-cell evaluation
 tests/           synthetic protocol and numerical tests
 ```
@@ -53,8 +53,9 @@ tests/           synthetic protocol and numerical tests
 
 ```bash
 python -m unittest discover -s tests -v
-python -m protofill --help
+python -m rapc --help
 python -m experiments.select_loco --help
+python -m experiments.select_loco_multiseed --help
 python -m experiments.evaluate --help
 ```
 
