@@ -5,10 +5,6 @@ that is missing from a **known** domain. It is encoder-agnostic: any acoustic
 encoder can be used as long as it exports embeddings with class and domain
 labels for the training split.
 
-This repository intentionally contains only the final RAPC method and the
-experiments needed to select and evaluate it. It does not contain the original
-competition training system, failed exploratory methods, audio datasets,
-checkpoints, embedding caches, or paper source.
 
 ## Final configuration
 
